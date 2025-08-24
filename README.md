@@ -1,21 +1,24 @@
-# TileGrid — визуализация XYZ-тайлов (Web Mercator)
+# TileGrid — Visualization of XYZ Tiles (Web Mercator)
 
-Мини-утилита на Python для демонстрации работы плиточной схемы карт (XYZ) и связи
-между **географическими координатами** (широта/долгота, WGS84) и **картографическими**
-координатами тайлов (**X/Y/Z**, Web Mercator, EPSG:3857).
-
----
-
-## Возможности
-- Перевод точки *(lat, lon, Z)* → тайл *(X, Y)* и пиксельная позиция *(px, py)* внутри тайла.
-- Рендер сетки тайлов **N×N** вокруг точки, с подписями **X/Y/Z** и маркером точки.
-- Настройка размера тайла (по умолчанию 256 px), z-уровней, размера сетки.
-- Защитная валидация аргументов с понятными сообщениями об ошибках.
+A small Python utility to demonstrate the tile map scheme (XYZ) and the relation
+between **geographic coordinates** (latitude/longitude, WGS84) and **cartographic**
+tile coordinates (**X/Y/Z**, Web Mercator, EPSG:3857).
 
 ---
 
-## Установка
-Требуется Python 3.8+.
+## Features
+
+* Convert a point *(lat, lon, Z)* → tile *(X, Y)* and pixel position *(px, py)* within a tile.
+* Render a **N×N** tile grid around the point with **X/Y/Z** labels and a marker.
+* Configure tile size (default 256 px), zoom levels, and grid size.
+* Input validation with clear error messages.
+
+---
+
+## Installation
+
+Requires Python 3.8+.
+
 ```bash
 python -m venv .venv
 # Windows
@@ -25,48 +28,58 @@ python -m venv .venv
 
 pip install -r requirements.txt
 ```
-Файл `requirements.txt`:
+
+File `requirements.txt`:
+
 ```
 pillow>=10.0.0
 ```
 
 ---
 
-## Запуск
-Базовый пример (Точка в Самаре):
+## Usage
+
+Basic example (Point in Samara):
+
 ```bash
 python tiles_demo.py --lat 53.1959 --lon 50.1008 --zooms 12 13 14 --grid 3 --out ./out
 ```
-Пример вывода:
+
+Example output:
+
 ```
-[OK] Z=12: сохранено ./out/grid_z12.png | tile=(2618,1330) px=(9,145)
-[OK] Z=13: сохранено ./out/grid_z13.png | tile=(5236,2661) px=(18,34)
-[OK] Z=14: сохранено ./out/grid_z14.png | tile=(10472,5322) px=(36,69)
+[OK] Z=12: saved ./out/grid_z12.png | tile=(2618,1330) px=(9,145)
+[OK] Z=13: saved ./out/grid_z13.png | tile=(5236,2661) px=(18,34)
+[OK] Z=14: saved ./out/grid_z14.png | tile=(10472,5322) px=(36,69)
 ```
 
-Другие варианты:
+Other options:
+
 ```bash
-# Крупнее тайл (512 px) на одном масштабе
+# Larger tile (512 px) at a single zoom level
 python tiles_demo.py --lat 53.1959 --lon 50.1008 --zooms 14 --grid 3 --tile-size 512 --out ./out_bigtiles
 
-# Таллинн, сетка 5×5 на Z=13
+# Tallinn, 5×5 grid at Z=13
 python tiles_demo.py --lat 59.437 --lon 24.7536 --zooms 13 --grid 5 --out ./out_tallinn
 ```
 
-В результате получаются PNG с сеткой тайлов и меткой точки.
-Нижняя подпись показывает служебную информацию: центр. тайл *(X, Y)* и пиксельные координаты точки *(px, py)* внутри него.
+The result is PNG images with a tile grid and point marker.
+The footer shows: center tile *(X, Y)* and pixel coordinates *(px, py)* of the point within it.
 
 ---
 
-## Теория 
+## Theory
 
-### 1) Что такое географические и картографические координаты?
-- **Географические координаты (WGS84):** широта φ (−90..+90°) и долгота λ (−180..+180°), не зависят от масштаба.
-- **Картографические координаты (Web Mercator, XYZ):** мир делится на сетку **2^Z × 2^Z** тайлов при уровне **Z**,
-  каждый тайл обычно **256×256 px**. Координаты тайла — целые индексы **X, Y**, зависящие от **Z**.
+### 1) Geographic vs. Cartographic Coordinates
 
-### 2) Преобразование (lat, lon, Z) → (X, Y) и (px, py)
-Обозначим `n = 2^Z`, `φ` — в радианах.
+* **Geographic coordinates (WGS84):** latitude φ (−90..+90°) and longitude λ (−180..+180°), independent of zoom.
+* **Cartographic coordinates (Web Mercator, XYZ):** the world is divided into a **2^Z × 2^Z** grid of tiles at zoom **Z**,
+  each tile usually **256×256 px**. Tile coordinates are integer indices **X, Y** depending on **Z**.
+
+### 2) Transformation (lat, lon, Z) → (X, Y) and (px, py)
+
+Let `n = 2^Z`, `φ` in radians.
+
 ```
 x_norm = (λ + 180) / 360
 y_norm = (1 - ln(tan φ + sec φ) / π) / 2
@@ -79,31 +92,33 @@ py_total = y_norm * n * tile_size
 px = floor(px_total) % tile_size
 py = floor(py_total) % tile_size
 ```
-Широта ограничивается диапазоном Web Mercator: примерно **±85.0511°**.
 
-### 3) Почему при увеличении масштаба подгружаются новые тайлы?
-При росте **Z** сетка становится плотнее (**2^Z × 2^Z**). Точка попадает уже в **другой набор тайлов** с большим
-разрешением — клиент загружает **новые** плитки, а не «растягивает» старые: так сохраняется детализация.
+Latitude is limited by Web Mercator to approx. **±85.0511°**.
 
-### 4) Как понять границы тайла в градусах?
-Для тайла *(X, Y, Z)*:
+### 3) Why load new tiles when zooming in?
+
+As **Z** increases, the grid becomes denser (**2^Z × 2^Z**). The point falls into a new set of tiles at higher resolution.
+The client loads **new tiles** instead of stretching old ones — this preserves detail.
+
+### 4) Tile boundaries in degrees
+
+For a tile *(X, Y, Z)*:
+
 ```
 n = 2^Z
 lon_min =  X    / n * 360 - 180
 lon_max = (X+1) / n * 360 - 180
 
-lat(y) = atan(sinh(π * (1 - 2*y/n))) в градусах
+lat(y) = atan(sinh(π * (1 - 2*y/n))) in degrees
 lat_max = lat(Y)
 lat_min = lat(Y+1)
 ```
 
 ---
 
-## Частые ошибки и их решения
-- `ModuleNotFoundError: No module named 'PIL'` → установите `pip install pillow` в **том же venv**.
-- `--grid` должно быть нечётным положительным числом (3, 5, …).
-- Диапазоны: широта −90..90, долгота −180..180, Z — 0..22 (практически 0..19).
-- Если линии текста обрезаются внизу, используйте больший `--tile-size` или меньший `--grid`.
+## Common Errors and Solutions
 
-
-
+* `ModuleNotFoundError: No module named 'PIL'` → install `pip install pillow` in the **same venv**.
+* `--grid` must be an odd positive integer (3, 5, …).
+* Ranges: latitude −90..90, longitude −180..180, Z — 0..22 (practically 0..19).
+* If text lines are cut off at the bottom, use a larger `--tile-size` or smaller `--grid`.
